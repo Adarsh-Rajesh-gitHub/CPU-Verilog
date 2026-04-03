@@ -14,7 +14,7 @@ reg [11:0] exp_res;
 reg [52:0] mant_res;
 reg [53:0] temp;
 reg [105:0] temp_big;
-
+integer i, exp_1den, exp_2den, exp_resden, shift;
 always @(*) begin
     case (fpu_op)        
         5'h00, 5'h01:  begin //subf or addf for sub do addf but //just reverse on e sign and change op code
@@ -128,6 +128,42 @@ always @(*) begin
                 result = {a[63] ^ b[63], 11'd0, 52'd0};
             else if(b[62:0] == 0)
                 result = {a[63] ^ b[63], 11'h7FF, 52'd0};
+            else if ((a[62:52] == 0 && a[51:0] != 0) || (b[62:52] == 0 && b[51:0] != 0)) begin
+                sign = a[63] ^ b[63];
+                exp_1den = (a[62:52] == 0) ? -1022 : (a[62:52] - 1023);
+                exp_2den = (b[62:52] == 0) ? -1022 : (b[62:52] - 1023);
+                mant_1 = (a[62:52] == 0) ? {1'b0, a[51:0]} : {1'b1, a[51:0]};
+                mant_2 = (b[62:52] == 0) ? {1'b0, b[51:0]} : {1'b1, b[51:0]};
+                for(i = 0; i < 52 && mant_1 != 0 && !mant_1[52]; i = i + 1) begin
+                    mant_1 = mant_1 << 1;
+                    exp_1den = exp_1den - 1;
+                end
+
+                for(i = 0; i < 52 && mant_2 != 0 && !mant_2[52]; i = i + 1) begin
+                    mant_2 = mant_2 << 1;
+                    exp_2den = exp_2den - 1;
+                end
+
+                exp_resden = exp_1den - exp_2den;
+
+                temp_big = ({53'd0, mant_1} << 52) / mant_2;
+                mant_res = temp_big[52:0];
+
+                if(mant_res < (53'd1 << 52)) begin
+                    mant_res = mant_res << 1;
+                    exp_resden = exp_resden - 1;
+                end
+
+                if(exp_resden < -1022) begin
+                    shift = -1022 - exp_resden;
+                    mant_res = mant_res >> shift;
+                    result = {sign, 11'd0, mant_res[51:0]};
+                end
+                else begin
+                    exp_res = exp_resden + 1023;
+                    result = {sign, exp_res[10:0], mant_res[51:0]};
+                end
+            end
             else begin
                 sign = a[63] ^ b[63];
                 exp_1 = (a[62:52] == 0) ? 11'd1 : a[62:52];
