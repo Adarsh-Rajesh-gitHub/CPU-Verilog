@@ -7,7 +7,14 @@ module instruction_decoder(
     output [11:0] L,
     output reg use_alu,
     output reg use_fpu,
-    output reg use_imm,
+    output reg is_literal,
+    output reg br_abs,
+    output reg br_rel_reg,
+    output reg br_rel_lit,
+    output reg br_nz,
+    output reg br_gt,
+    output reg call_inst,
+    output reg return_inst,
     output reg [4:0] alu_op,
     output reg [4:0] fpu_op,
     output reg reg_write
@@ -22,35 +29,50 @@ assign L = instruction[11:0];
 always @(*) begin
     use_alu = 1'b0;
     use_fpu = 1'b0;
-    use_imm = 1'b0;
+    is_literal = 1'b0;
+    br_abs = 1'b0;
+    br_rel_reg = 1'b0;
+    br_rel_lit = 1'b0;
+    br_nz = 1'b0;
+    br_gt = 1'b0;
+    call_inst = 1'b0;
+    return_inst = 1'b0;
     alu_op = 5'h00;
     fpu_op = 5'h00;
     reg_write = 1'b0;
 
     case (opcode)
-        5'h00: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h00; end // and
-        5'h01: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h01; end // or
-        5'h02: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h02; end // xor
-        5'h03: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h03; end // not
-        5'h04: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h04; end // shftr
-        5'h05: begin use_alu = 1'b1; use_imm = 1'b1; reg_write = 1'b1; alu_op = 5'h04; end // shftri
-        5'h06: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h05; end // shftl
-        5'h07: begin use_alu = 1'b1; use_imm = 1'b1; reg_write = 1'b1; alu_op = 5'h05; end // shftli
+        5'h00: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h00; end
+        5'h01: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h01; end
+        5'h02: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h02; end
+        5'h03: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h03; end
+        5'h04: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h04; end
+        5'h05: begin use_alu = 1'b1; is_literal = 1'b1; reg_write = 1'b1; alu_op = 5'h04; end
+        5'h06: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h05; end
+        5'h07: begin use_alu = 1'b1; is_literal = 1'b1; reg_write = 1'b1; alu_op = 5'h05; end
 
-        5'h11: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h08; end // mov rd, rs
-        5'h12: begin use_alu = 1'b1; use_imm = 1'b1; reg_write = 1'b1; alu_op = 5'h09; end // mov rd, L
+        5'h08: begin br_abs = 1'b1; end
+        5'h09: begin br_rel_reg = 1'b1; end
+        5'h0A: begin br_rel_lit = 1'b1; end
+        5'h0B: begin br_nz = 1'b1; end
+        5'h0C: begin call_inst = 1'b1; end
+        5'h0D: begin return_inst = 1'b1; end
+        5'h0E: begin br_gt = 1'b1; end
 
-        5'h14: begin use_fpu = 1'b1; reg_write = 1'b1; fpu_op = 5'h00; end // addf
-        5'h15: begin use_fpu = 1'b1; reg_write = 1'b1; fpu_op = 5'h01; end // subf
-        5'h16: begin use_fpu = 1'b1; reg_write = 1'b1; fpu_op = 5'h02; end // mulf
-        5'h17: begin use_fpu = 1'b1; reg_write = 1'b1; fpu_op = 5'h03; end // divf
+        5'h11: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h08; end
+        5'h12: begin use_alu = 1'b1; is_literal = 1'b1; reg_write = 1'b1; alu_op = 5'h09; end
 
-        5'h18: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h06; end // add
-        5'h19: begin use_alu = 1'b1; use_imm = 1'b1; reg_write = 1'b1; alu_op = 5'h06; end // addi
-        5'h1A: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h07; end // sub
-        5'h1B: begin use_alu = 1'b1; use_imm = 1'b1; reg_write = 1'b1; alu_op = 5'h07; end // subi
-        5'h1C: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h0A; end // mul
-        5'h1D: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h0B; end // div
+        5'h14: begin use_fpu = 1'b1; reg_write = 1'b1; fpu_op = 5'h00; end
+        5'h15: begin use_fpu = 1'b1; reg_write = 1'b1; fpu_op = 5'h01; end
+        5'h16: begin use_fpu = 1'b1; reg_write = 1'b1; fpu_op = 5'h02; end
+        5'h17: begin use_fpu = 1'b1; reg_write = 1'b1; fpu_op = 5'h03; end
+
+        5'h18: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h06; end
+        5'h19: begin use_alu = 1'b1; is_literal = 1'b1; reg_write = 1'b1; alu_op = 5'h06; end
+        5'h1A: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h07; end
+        5'h1B: begin use_alu = 1'b1; is_literal = 1'b1; reg_write = 1'b1; alu_op = 5'h07; end
+        5'h1C: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h0A; end
+        5'h1D: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h0B; end
 
         default: begin end
     endcase
