@@ -141,7 +141,10 @@ always @(*) begin
 
                 if (mant_res < (53'd1 << 52)) begin
                     mant_res = mant_res << 1;
-                    exp_res = exp_res - 1;
+                    if (exp_res > 0)
+                        exp_res = exp_res - 1;
+                    else
+                        exp_res = 0;
                 end
 
                 result = {sign, exp_res[10:0], mant_res[51:0]};
