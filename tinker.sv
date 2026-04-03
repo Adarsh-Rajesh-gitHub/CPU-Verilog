@@ -11,12 +11,6 @@ module tinker_core(
 );
 
 wire [63:0] pc;
-
-
-initial begin
-    pc = 64'h2000;
-end
-
 reg [63:0] next_pc;
 wire [31:0] instruction;
 
