@@ -102,21 +102,21 @@ always @(*) begin
             mant_1 = {1'b1, a[51:0]};
             mant_2 = {1'b1, b[51:0]};
 
-            if (mant_2 == 0 and exp_2 == 0) begin
-                result = 64'h7FF8000000000000; 
-                return;
+            if (mant_2 == 0 && exp_2 == 0) begin
+                result = 64'h7FF8000000000000;
             end
+            else begin
+                exp_res = exp_1 - exp_2 + 1023;
+                temp_big = ({53'd0, mant_1} << 52) / mant_2;
+                mant_res = temp_big[52:0];
 
-            exp_res = exp_1 - exp_2 + 1023;
-            temp_big = ({53'd0, mant_1} << 52) / mant_2;
-            mant_res = temp_big[52:0];
+                if (mant_res < (53'd1 << 52)) begin
+                    mant_res = mant_res << 1;
+                    exp_res = exp_res - 1;
+                end
 
-            if (mant_res < (53'd1 << 52)) begin
-                mant_res = mant_res << 1;
-                exp_res = exp_res - 1;
+                result = {sign, exp_res[10:0], mant_res[51:0]};
             end
-
-            result = {sign, exp_res[10:0], mant_res[51:0]};
         end
         default: result = 64'd0;
     endcase
