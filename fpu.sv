@@ -8,7 +8,7 @@ module fpu(
 //will comeback
 
 reg sign, sign_a, sign_b;
-reg [10:0] exp_1, exp_2;
+reg [10:0] exp_1, exp_2, diff;
 reg [52:0] mant_1, mant_2;
 reg [11:0] exp_res;
 reg [52:0] mant_res;
@@ -16,7 +16,6 @@ reg [53:0] temp;
 reg [105:0] temp_big;
 
 always @(*) begin
-    result = 0
     case (fpu_op)        
         5'h00, 5'h01:  begin //subf or addf for sub do addf but //just reverse on e sign and change op code
                     //align exponents by incrementing smaller exp and shifting mantissa to right till both equal, add mantissas sign same then add else subtract smaller mag form bigger mag and take sign of biggest mag, in end also check if mantiss over 1 on significant bit and if so just add 1 to exp and if mantissa such that leading bit shift left one and subtract 1 to exp
@@ -28,14 +27,15 @@ always @(*) begin
             mant_1 = {1'b1, a[51:0]};
             mant_2 = {1'b1, b[51:0]};
 
-            while (exp_1 > exp_2) begin
-                mant_2 = mant_2 >> 1;
-                exp_2 = exp_2 + 1;
+            diff = exp_1 > exp_2 ? exp_1-exp_2  : exp_2-exp_1;
+            if (exp_1 > exp_2) begin
+                mant_2 = mant_2 >> diff;
+                exp_2 = exp_2 + diff;
             end
 
-            while (exp_2 > exp_1) begin
-                mant_1 = mant_1 >> 1;
-                exp_1 = exp_1 + 1;
+            if (exp_2 > exp_1) begin
+                mant_1 = mant_1 >> diff;
+                exp_1 = exp_1 + diff;
             end
 
             if (sign_a == sign_b) begin
