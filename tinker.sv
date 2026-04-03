@@ -17,7 +17,6 @@ initial begin
     pc = 64'h2000;
 end
 
-wire [63:0] pc = 64'h2000;
 reg [63:0] next_pc;
 wire [31:0] instruction;
 
