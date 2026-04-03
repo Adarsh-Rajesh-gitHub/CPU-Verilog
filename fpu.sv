@@ -102,6 +102,11 @@ always @(*) begin
             mant_1 = {1'b1, a[51:0]};
             mant_2 = {1'b1, b[51:0]};
 
+            if (mant_2 == 0 and exp_2 == 0) begin
+                result = 64'h7FF8000000000000; 
+                return;
+            end
+
             exp_res = exp_1 - exp_2 + 1023;
             temp_big = ({53'd0, mant_1} << 52) / mant_2;
             mant_res = temp_big[52:0];
