@@ -16,7 +16,7 @@ always @(*) begin
         5'h06: result = $signed(a) + $signed(b);
         5'h07: result = $signed(a) - $signed(b);
         5'h08: result = a;
-        5'h09: result = {b[11:0], a[51:0]};
+        5'h09: result = {a[63:12], b[11:0]};
         5'h0A: result = $signed(a) * $signed(b);
         5'h0B: result = (b != 0) ? ($signed(a) / $signed(b)) : 64'd0;
         default: result = 64'd0;
