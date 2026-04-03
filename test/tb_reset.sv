@@ -9,6 +9,7 @@ module tb_reset;
     always #10 clk = ~clk;
 
     initial begin
+        reset = 1;
         clk = 0;
         reset = 0;
         
