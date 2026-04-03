@@ -21,7 +21,7 @@ always @(*) begin
                     //align exponents by incrementing smaller exp and shifting mantissa to right till both equal, add mantissas sign same then add else subtract smaller mag form bigger mag and take sign of biggest mag, in end also check if mantiss over 1 on significant bit and if so just add 1 to exp and if mantissa such that leading bit shift left one and subtract 1 to exp
             if(a[62:0] == 0) 
                 if(fpu_op == 5'h00) result = b;
-                else result = -b;
+                else result = {~b[63], b[62:0]};
             else if(b[62:0] == 0) result = a;
             else begin
                 sign_a = a[63];
