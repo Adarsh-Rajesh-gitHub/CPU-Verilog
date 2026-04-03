@@ -22,7 +22,7 @@ always @(*) begin
             if(a[62:0] == 0) 
                 if(fpu_op == 5'h00) result = b;
                 else result = {~b[63], b[62:0]};
-            else if(b[62:0] == 0) result = a;
+            else if(b[62:0] == 0) result = (b[62:0] == 0) ? 0 : {~b[63], b[62:0]};
             else begin
                 sign_a = a[63];
                 sign_b = b[63] ^ (fpu_op == 5'h01);
