@@ -19,10 +19,12 @@ always @(*) begin
     case (fpu_op)        
         5'h00, 5'h01:  begin //subf or addf for sub do addf but //just reverse on e sign and change op code
                     //align exponents by incrementing smaller exp and shifting mantissa to right till both equal, add mantissas sign same then add else subtract smaller mag form bigger mag and take sign of biggest mag, in end also check if mantiss over 1 on significant bit and if so just add 1 to exp and if mantissa such that leading bit shift left one and subtract 1 to exp
-            if(a[62:0] == 0) 
-                if(fpu_op == 5'h00) result = b;
+            if (a[62:0] == 0) begin
+                if (b[62:0] == 0) result = 64'd0;
+                else if (fpu_op == 5'h00) result = b;
                 else result = {~b[63], b[62:0]};
-            else if(b[62:0] == 0) result = (b[62:0] == 0) ? 0 : {~b[63], b[62:0]};
+            end
+            else if (b[62:0] == 0) result = a;
             else begin
                 sign_a = a[63];
                 sign_b = b[63] ^ (fpu_op == 5'h01);
@@ -129,7 +131,7 @@ always @(*) begin
                 mant_1 = {1'b1, a[51:0]};
                 mant_2 = {1'b1, b[51:0]};
 
-                if (mant_2 == 0 && exp_2 == 0) begin
+                if (mant_2[51:0] == 0 && exp_2 == 0) begin
                     result = 64'h7FF8000000000000;
                 end
                 else begin
