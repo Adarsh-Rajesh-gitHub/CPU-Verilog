@@ -76,9 +76,9 @@ always @(*) begin
                         end
                     end
                 end
+                result = {sign, exp_1[10:0], mant_res[51:0]};
             end
-
-            result = {sign, exp_1[10:0], mant_res[51:0]};
+            
         end
         5'h02: begin//mulf
         //exponents-bias and add both and then add the bias, multiply mantissa assuming that on eahead and rewriter
