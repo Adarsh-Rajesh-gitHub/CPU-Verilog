@@ -140,11 +140,13 @@ always @(*) begin
                 mant_res = temp_big[52:0];
 
                 if (mant_res < (53'd1 << 52)) begin
-                    mant_res = mant_res << 1;
-                    if (exp_res > 0)
+                    if (exp_res > 1) begin
+                        mant_res = mant_res << 1;
                         exp_res = exp_res - 1;
-                    else
+                    end
+                    else begin
                         exp_res = 0;
+                    end
                 end
 
                 result = {sign, exp_res[10:0], mant_res[51:0]};
