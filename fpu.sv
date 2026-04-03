@@ -124,28 +124,27 @@ always @(*) begin
                 result = {a[63] ^ b[63], 11'h7FF, 52'd0};
             else if(b[62:52] == 11'h7FF && b[51:0] == 0)
                 result = {a[63] ^ b[63], 11'd0, 52'd0};
+            else if(a[62:0] == 0)
+                result = {a[63] ^ b[63], 11'd0, 52'd0};
+            else if(b[62:0] == 0)
+                result = {a[63] ^ b[63], 11'h7FF, 52'd0};
             else begin
                 sign = a[63] ^ b[63];
-                exp_1 = a[62:52];
-                exp_2 = b[62:52];
-                mant_1 = {1'b1, a[51:0]};
-                mant_2 = {1'b1, b[51:0]};
+                exp_1 = (a[62:52] == 0) ? 11'd1 : a[62:52];
+                exp_2 = (b[62:52] == 0) ? 11'd1 : b[62:52];
+                mant_1 = (a[62:52] == 0) ? {1'b0, a[51:0]} : {1'b1, a[51:0]};
+                mant_2 = (b[62:52] == 0) ? {1'b0, b[51:0]} : {1'b1, b[51:0]};
 
-                if (mant_2[51:0] == 0 && exp_2 == 0) begin
-                    result = 64'h7FF8000000000000;
+                exp_res = exp_1 - exp_2 + 1023;
+                temp_big = ({53'd0, mant_1} << 52) / mant_2;
+                mant_res = temp_big[52:0];
+
+                if (mant_res < (53'd1 << 52)) begin
+                    mant_res = mant_res << 1;
+                    exp_res = exp_res - 1;
                 end
-                else begin
-                    exp_res = exp_1 - exp_2 + 1023;
-                    temp_big = ({53'd0, mant_1} << 52) / mant_2;
-                    mant_res = temp_big[52:0];
 
-                    if (mant_res < (53'd1 << 52)) begin
-                        mant_res = mant_res << 1;
-                        exp_res = exp_res - 1;
-                    end
-
-                    result = {sign, exp_res[10:0], mant_res[51:0]};
-                end
+                result = {sign, exp_res[10:0], mant_res[51:0]};
             end
         end
         default: result = 64'd0;
