@@ -10,6 +10,10 @@ module tinker_core(
     input reset
 );
 
+//for multicycle cpu implementation
+reg [2:0] state;
+// 0 - fetch, 1 - decode, 2 - execute, 3 - writeback
+
 wire [63:0] pc;
 reg [63:0] next_pc;
 wire [31:0] instruction;
@@ -22,8 +26,6 @@ wire br_abs, br_rel_reg, br_rel_lit, br_nz, br_gt, call_inst, return_inst;
 wire [4:0] alu_op, fpu_op;
 
 wire [63:0] rd_data, rs_data, rt_data, r31_data;
-wire [63:0] alu_a, alu_b;
-wire [63:0] alu_result, fpu_result, write_data;
 
 wire [63:0] literal_ext;
 wire [63:0] branch_offset;
@@ -32,49 +34,115 @@ wire [63:0] mem_write_data;
 wire [63:0] mem_data;
 wire mem_write;
 
+
+//for multicycle implementation
+reg [31:0] inst_latched;
+reg [63:0] A_latched, B_latched, ALU_A_latched, ALU_B_latched;
+reg [63:0] ResultReg_latched;
+
+
 assign literal_ext = {52'b0, L};
 assign branch_offset = {{52{L[11]}}, L};
 
-assign alu_a = is_literal ? rd_data : rs_data;
-assign alu_b = is_literal ? literal_ext : rt_data;
-assign write_data = use_fpu ? fpu_result : alu_result;
+wire [63:0] alu_result, fpu_result;
+reg [63:0] D_latched, SP_latched;
 
-assign mem_addr = r31_data - 64'd8;
+
+assign mem_addr = SP_latched - 64'd8;
 assign mem_write_data = pc + 64'd4;
-assign mem_write = call_inst;
+assign mem_write = (state == 2) && call_inst;
+
 
 always @(*) begin
-    if (return_inst)
-        next_pc = mem_data;
-    else if (call_inst)
-        next_pc = rd_data;
-    else if (br_abs)
-        next_pc = rd_data;
-    else if (br_rel_reg)
-        next_pc = pc + rd_data;
-    else if (br_rel_lit)
-        next_pc = pc + branch_offset;
-    else if (br_nz) begin
-        if (rs_data != 64'd0)
-            next_pc = rd_data;
-        else
-            next_pc = pc + 64'd4;
-    end
-    else if (br_gt) begin
-        if ($signed(rs_data) > $signed(rt_data))
-            next_pc = rd_data;
-        else
-            next_pc = pc + 64'd4;
-    end
-    else
+    next_pc = pc;
+    if(state == 3) begin
         next_pc = pc + 64'd4;
+    end
+    else if(state == 2) begin
+        if (return_inst)
+            next_pc = mem_data;
+        else if (call_inst)
+            next_pc = D_latched;
+        else if (br_abs)
+            next_pc = D_latched;
+        else if (br_rel_reg)
+            next_pc = pc + D_latched;
+        else if (br_rel_lit)
+            next_pc = pc + branch_offset;
+        else if (br_nz) begin
+            if (A_latched != 64'd0)
+                next_pc = D_latched;
+            else
+                next_pc = pc + 64'd4;
+        end
+        else if (br_gt) begin
+            if ($signed(A_latched) > $signed(B_latched))
+                next_pc = D_latched;
+            else
+                next_pc = pc + 64'd4;
+        end
+        else if (!use_alu && !use_fpu) begin
+            next_pc = pc + 64'd4;
+        end
+    end
 end
 
 instruction_fetch fetch(.clk(clk), .reset(reset), .next_pc(next_pc), .pc(pc));
 memory memory(.clk(clk), .reset(reset), .pc(pc), .instruction(instruction), .data_addr(mem_addr), .write_data(mem_write_data), .mem_write(mem_write), .data_read(mem_data));
-instruction_decoder decoder(.instruction(instruction), .opcode(opcode), .rd(rd), .rs(rs), .rt(rt), .L(L), .use_alu(use_alu), .use_fpu(use_fpu), .is_literal(is_literal), .br_abs(br_abs), .br_rel_reg(br_rel_reg), .br_rel_lit(br_rel_lit), .br_nz(br_nz), .br_gt(br_gt), .call_inst(call_inst), .return_inst(return_inst), .alu_op(alu_op), .fpu_op(fpu_op), .reg_write(reg_write));
-register_file reg_file(.clk(clk), .reset(reset), .rd(rd), .rs(rs), .rt(rt), .write_data(write_data), .reg_write(reg_write), .rd_data(rd_data), .rs_data(rs_data), .rt_data(rt_data), .r31_data(r31_data));
-alu alu(.alu_op(alu_op), .a(alu_a), .b(alu_b), .result(alu_result));
-fpu fpu(.fpu_op(fpu_op), .a(rs_data), .b(rt_data), .result(fpu_result));
+instruction_decoder decoder(.instruction(inst_latched), .opcode(opcode), .rd(rd), .rs(rs), .rt(rt), .L(L), .use_alu(use_alu), .use_fpu(use_fpu), .is_literal(is_literal), .br_abs(br_abs), .br_rel_reg(br_rel_reg), .br_rel_lit(br_rel_lit), .br_nz(br_nz), .br_gt(br_gt), .call_inst(call_inst), .return_inst(return_inst), .alu_op(alu_op), .fpu_op(fpu_op), .reg_write(reg_write));
+wire reg_write_final;
+assign reg_write_final = (state == 3) && reg_write;
+register_file reg_file(.clk(clk), .reset(reset), .rd(rd), .rs(rs), .rt(rt), .write_data(ResultReg_latched), .reg_write(reg_write_final), .rd_data(rd_data), .rs_data(rs_data), .rt_data(rt_data), .r31_data(r31_data));
+alu alu(.alu_op(alu_op), .a(ALU_A_latched), .b(ALU_B_latched), .result(alu_result));
+fpu fpu(.fpu_op(fpu_op), .a(A_latched), .b(B_latched), .result(fpu_result));
+
+
+always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            state <= 0;
+            inst_latched <= 32'd0;
+            A_latched  <= 64'd0;
+            B_latched  <= 64'd0;
+            ALU_A_latched <= 64'd0;
+            ALU_B_latched <= 64'd0;
+            ResultReg_latched <= 64'd0;
+            D_latched <= 64'd0;
+            SP_latched <= 64'd0;
+        end
+        else begin
+            if (state == 0) begin
+                inst_latched <= instruction;
+                state <= 1;
+            end
+            else if (state == 1) begin
+                A_latched  <= rs_data;
+                B_latched  <= rt_data;
+                ALU_A_latched <= is_literal ? rd_data : rs_data;
+                ALU_B_latched <= is_literal ? literal_ext : rt_data;
+                D_latched  <= rd_data;
+                SP_latched <= r31_data;
+                state <= 2;
+            end
+            else if (state == 2) begin
+                if (use_alu) begin
+                    ResultReg_latched <= alu_result;
+                    state <= 3;
+                end
+                else if (use_fpu) begin
+                    ResultReg_latched <= fpu_result;
+                    state <= 3;
+                end
+                else begin
+                    state <= 0;
+                end
+            end
+            else if (state == 3) begin
+                state <= 0;
+            end
+            else begin
+                state <= 0;
+            end
+        end
+    end
 
 endmodule
