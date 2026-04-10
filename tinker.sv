@@ -99,7 +99,7 @@ memory memory(.clk(clk), .reset(reset), .pc(pc), .instruction(instruction), .dat
 instruction_decoder decoder(.instruction(inst_latched), .opcode(opcode), .rd(rd), .rs(rs), .rt(rt), .L(L), .use_alu(use_alu), .use_fpu(use_fpu), .is_literal(is_literal), .br_abs(br_abs), .br_rel_reg(br_rel_reg), .br_rel_lit(br_rel_lit), .br_nz(br_nz), .br_gt(br_gt), .call_inst(call_inst), .return_inst(return_inst), .alu_op(alu_op), .fpu_op(fpu_op), .reg_write(reg_write));
 wire reg_write_final;
 assign reg_write_final = !hlt && (state == 3) && reg_write;
-assign halt_inst = (opcode == 5'h10) && (L == 12'h000);
+assign halt_inst = (opcode == 5'h0f) && (L == 12'h000);
 register_file reg_file(.clk(clk), .reset(reset), .rd(rd), .rs(rs), .rt(rt), .write_data(ResultReg_latched), .reg_write(reg_write_final), .rd_data(rd_data), .rs_data(rs_data), .rt_data(rt_data), .r31_data(r31_data));
 alu alu(.alu_op(alu_op), .a(ALU_A_latched), .b(ALU_B_latched), .result(alu_result));
 fpu fpu(.fpu_op(fpu_op), .a(A_latched), .b(B_latched), .result(fpu_result));
