@@ -7,7 +7,8 @@
 
 module tinker_core(
     input clk,
-    input reset
+    input reset,
+    output logic hlt
 );
 
 //for multicycle cpu implementation
@@ -39,6 +40,7 @@ wire mem_write;
 reg [31:0] inst_latched;
 reg [63:0] A_latched, B_latched, ALU_A_latched, ALU_B_latched;
 reg [63:0] ResultReg_latched;
+wire halt_inst;
 
 
 assign literal_ext = {52'b0, L};
@@ -50,16 +52,21 @@ reg [63:0] D_latched, SP_latched;
 
 assign mem_addr = SP_latched - 64'd8;
 assign mem_write_data = pc + 64'd4;
-assign mem_write = (state == 2) && call_inst;
+assign mem_write = !hlt && (state == 2) && call_inst;
 
 
 always @(*) begin
     next_pc = pc;
-    if(state == 3) begin
+    if (hlt) begin
+        next_pc = pc;
+    end
+    else if(state == 3) begin
         next_pc = pc + 64'd4;
     end
     else if(state == 2) begin
-        if (return_inst)
+        if (halt_inst)
+            next_pc = pc;
+        else if (return_inst)
             next_pc = mem_data;
         else if (call_inst)
             next_pc = D_latched;
@@ -91,7 +98,8 @@ instruction_fetch fetch(.clk(clk), .reset(reset), .next_pc(next_pc), .pc(pc));
 memory memory(.clk(clk), .reset(reset), .pc(pc), .instruction(instruction), .data_addr(mem_addr), .write_data(mem_write_data), .mem_write(mem_write), .data_read(mem_data));
 instruction_decoder decoder(.instruction(inst_latched), .opcode(opcode), .rd(rd), .rs(rs), .rt(rt), .L(L), .use_alu(use_alu), .use_fpu(use_fpu), .is_literal(is_literal), .br_abs(br_abs), .br_rel_reg(br_rel_reg), .br_rel_lit(br_rel_lit), .br_nz(br_nz), .br_gt(br_gt), .call_inst(call_inst), .return_inst(return_inst), .alu_op(alu_op), .fpu_op(fpu_op), .reg_write(reg_write));
 wire reg_write_final;
-assign reg_write_final = (state == 3) && reg_write;
+assign reg_write_final = !hlt && (state == 3) && reg_write;
+assign halt_inst = (opcode == 5'h10) && (L == 12'h000);
 register_file reg_file(.clk(clk), .reset(reset), .rd(rd), .rs(rs), .rt(rt), .write_data(ResultReg_latched), .reg_write(reg_write_final), .rd_data(rd_data), .rs_data(rs_data), .rt_data(rt_data), .r31_data(r31_data));
 alu alu(.alu_op(alu_op), .a(ALU_A_latched), .b(ALU_B_latched), .result(alu_result));
 fpu fpu(.fpu_op(fpu_op), .a(A_latched), .b(B_latched), .result(fpu_result));
@@ -99,6 +107,7 @@ fpu fpu(.fpu_op(fpu_op), .a(A_latched), .b(B_latched), .result(fpu_result));
 
 always @(posedge clk or posedge reset) begin
         if (reset) begin
+            hlt <= 1'b0;
             state <= 0;
             inst_latched <= 32'd0;
             A_latched  <= 64'd0;
@@ -108,6 +117,9 @@ always @(posedge clk or posedge reset) begin
             ResultReg_latched <= 64'd0;
             D_latched <= 64'd0;
             SP_latched <= 64'd0;
+        end
+        else if(hlt) begin
+            //do nothing
         end
         else begin
             if (state == 0) begin
@@ -124,7 +136,11 @@ always @(posedge clk or posedge reset) begin
                 state <= 2;
             end
             else if (state == 2) begin
-                if (use_alu) begin
+                if (halt_inst) begin
+                    hlt <= 1'b1;
+                    state <= 2;
+                end
+                else if (use_alu) begin
                     ResultReg_latched <= alu_result;
                     state <= 3;
                 end
