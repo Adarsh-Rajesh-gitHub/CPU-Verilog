@@ -59,8 +59,10 @@ always @(*) begin
         5'h0D: begin return_inst = 1'b1; end
         5'h0E: begin br_gt = 1'b1; end
 
+        5'h10: begin reg_write = 1'b1; end
         5'h11: begin use_alu = 1'b1; reg_write = 1'b1; alu_op = 5'h08; end
         5'h12: begin use_alu = 1'b1; is_literal = 1'b1; reg_write = 1'b1; alu_op = 5'h09; end
+        5'h13: begin reg_write = 1'b0; end
 
         5'h14: begin use_fpu = 1'b1; reg_write = 1'b1; fpu_op = 5'h00; end
         5'h15: begin use_fpu = 1'b1; reg_write = 1'b1; fpu_op = 5'h01; end
