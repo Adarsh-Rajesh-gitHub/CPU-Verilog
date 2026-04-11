@@ -9,3 +9,6 @@ vvp test.out\
 
 iverilog -g2012 -I . -o cpu.out tinker.sv
 vvp cpu.out\
+
+//iverilog -g2012 -I . -o o.out test/tb_multicycle.sv vvp o.out
+this is for running the test that each insturciton takes longer than on eccyel
