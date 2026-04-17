@@ -1099,7 +1099,7 @@ always @(*) begin
             slot0_pred_target = pc + sign_ext12(L0);
         else if (br_rel_reg0 && slot0_src2_ready)
             slot0_pred_target = pc + slot0_src2_value;
-        else if ((br_abs0 || br_nz0 || br_gt0 || call0) && slot0_src1_ready)
+        else if (call0 && slot0_src1_ready)
             slot0_pred_target = slot0_src1_value;
         else if ((br_abs0 || br_nz0 || br_gt0) && slot0_src2_ready)
             slot0_pred_target = slot0_src2_value;
@@ -1191,7 +1191,7 @@ always @(*) begin
             slot1_pred_target = (pc + 64'd4) + sign_ext12(L1);
         else if (br_rel_reg1 && slot1_src2_ready)
             slot1_pred_target = (pc + 64'd4) + slot1_src2_value;
-        else if ((br_abs1 || br_nz1 || br_gt1 || call1) && slot1_src1_ready)
+        else if (call1 && slot1_src1_ready)
             slot1_pred_target = slot1_src1_value;
         else if ((br_abs1 || br_nz1 || br_gt1) && slot1_src2_ready)
             slot1_pred_target = slot1_src2_value;
@@ -1543,17 +1543,24 @@ always @(posedge clk or posedge reset) begin
                 free_tail = free_inc(free_tail);
                 free_count = free_count + 1'b1;
             end
-            if (rob_is_store[rob_head_plus1] || rob_is_call[rob_head_plus1]) begin
-                for (i = 0; i < LSQ_SIZE; i = i + 1) begin
-                    if (lsq_valid[i] && (lsq_rob[i] == rob_head_plus1)) begin
-                        lsq_valid[i] = 1'b0;
-                        lsq_control_issued[i] = 1'b0;
-                        lsq_control_done[i] = 1'b0;
+            if (rob_is_halt[rob_head_plus1]) begin
+                rob_valid[rob_head_plus1] = 1'b0;
+                rob_head = rob_inc(rob_head_plus1);
+                hlt = 1'b1;
+            end
+            else begin
+                if (rob_is_store[rob_head_plus1] || rob_is_call[rob_head_plus1]) begin
+                    for (i = 0; i < LSQ_SIZE; i = i + 1) begin
+                        if (lsq_valid[i] && (lsq_rob[i] == rob_head_plus1)) begin
+                            lsq_valid[i] = 1'b0;
+                            lsq_control_issued[i] = 1'b0;
+                            lsq_control_done[i] = 1'b0;
+                        end
                     end
                 end
+                rob_valid[rob_head_plus1] = 1'b0;
+                rob_head = rob_inc(rob_head_plus1);
             end
-            rob_valid[rob_head_plus1] = 1'b0;
-            rob_head = rob_inc(rob_head_plus1);
         end
 
         for (u = 0; u < 2; u = u + 1) begin

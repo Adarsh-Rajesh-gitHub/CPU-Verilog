@@ -14,6 +14,9 @@ reg [11:0] exp_res;
 reg [52:0] mant_res;
 reg [53:0] temp;
 reg [105:0] temp_big;
+reg [105:0] div_num;
+reg [52:0] div_rem;
+reg div_round_up;
 integer i, exp_1den, exp_2den, exp_resden, shift;
 always @(*) begin
     case (fpu_op)        
@@ -146,8 +149,25 @@ always @(*) begin
 
                 exp_resden = exp_1den - exp_2den;
 
-                temp_big = ({53'd0, mant_1} << 52) / mant_2;
-                mant_res = temp_big[52:0];
+                div_num = ({53'd0, mant_1} << 52);
+                temp_big = div_num / mant_2;
+                div_rem = div_num % mant_2;
+                temp = {1'b0, temp_big[52:0]};
+                div_round_up = 1'b0;
+                if (({1'b0, div_rem} << 1) > {1'b0, mant_2})
+                    div_round_up = 1'b1;
+                else if ((({1'b0, div_rem} << 1) == {1'b0, mant_2}) && temp[0])
+                    div_round_up = 1'b1;
+                if (div_round_up)
+                    temp = temp + 1'b1;
+
+                if (temp[53]) begin
+                    mant_res = temp[53:1];
+                    exp_resden = exp_resden + 1;
+                end
+                else begin
+                    mant_res = temp[52:0];
+                end
 
                 if(mant_res < (53'd1 << 52)) begin
                     mant_res = mant_res << 1;
@@ -172,8 +192,25 @@ always @(*) begin
                 mant_2 = (b[62:52] == 0) ? {1'b0, b[51:0]} : {1'b1, b[51:0]};
 
                 exp_res = exp_1 - exp_2 + 1023;
-                temp_big = ({53'd0, mant_1} << 52) / mant_2;
-                mant_res = temp_big[52:0];
+                div_num = ({53'd0, mant_1} << 52);
+                temp_big = div_num / mant_2;
+                div_rem = div_num % mant_2;
+                temp = {1'b0, temp_big[52:0]};
+                div_round_up = 1'b0;
+                if (({1'b0, div_rem} << 1) > {1'b0, mant_2})
+                    div_round_up = 1'b1;
+                else if ((({1'b0, div_rem} << 1) == {1'b0, mant_2}) && temp[0])
+                    div_round_up = 1'b1;
+                if (div_round_up)
+                    temp = temp + 1'b1;
+
+                if (temp[53]) begin
+                    mant_res = temp[53:1];
+                    exp_res = exp_res + 1;
+                end
+                else begin
+                    mant_res = temp[52:0];
+                end
 
                 if (mant_res < (53'd1 << 52)) begin
                     if (exp_res > 1) begin
