@@ -1738,15 +1738,30 @@ always @(posedge clk or posedge reset) begin
                     int_rs_rob[int_free0_idx] = rob_tail;
                     int_rs_has_dest[int_free0_idx] = slot0_has_dest;
                     int_rs_dest[int_free0_idx] = slot0_dest_phys;
-                    int_rs_src0_ready[int_free0_idx] = slot0_src0_ready;
+                    int_rs_src0_ready[int_free0_idx] = slot0_src0_ready || (!slot0_src0_ready && phys_ready[slot0_src0_tag]);
                     int_rs_src0_tag[int_free0_idx] = slot0_src0_tag;
-                    int_rs_src0_value[int_free0_idx] = slot0_src0_value;
-                    int_rs_src1_ready[int_free0_idx] = slot0_src1_ready;
+                    if (slot0_src0_ready)
+                        int_rs_src0_value[int_free0_idx] = slot0_src0_value;
+                    else if (phys_ready[slot0_src0_tag])
+                        int_rs_src0_value[int_free0_idx] = phys_value[slot0_src0_tag];
+                    else
+                        int_rs_src0_value[int_free0_idx] = slot0_src0_value;
+                    int_rs_src1_ready[int_free0_idx] = slot0_src1_ready || (!slot0_src1_ready && phys_ready[slot0_src1_tag]);
                     int_rs_src1_tag[int_free0_idx] = slot0_src1_tag;
-                    int_rs_src1_value[int_free0_idx] = slot0_src1_value;
-                    int_rs_src2_ready[int_free0_idx] = slot0_src2_ready;
+                    if (slot0_src1_ready)
+                        int_rs_src1_value[int_free0_idx] = slot0_src1_value;
+                    else if (phys_ready[slot0_src1_tag])
+                        int_rs_src1_value[int_free0_idx] = phys_value[slot0_src1_tag];
+                    else
+                        int_rs_src1_value[int_free0_idx] = slot0_src1_value;
+                    int_rs_src2_ready[int_free0_idx] = slot0_src2_ready || (!slot0_src2_ready && phys_ready[slot0_src2_tag]);
                     int_rs_src2_tag[int_free0_idx] = slot0_src2_tag;
-                    int_rs_src2_value[int_free0_idx] = slot0_src2_value;
+                    if (slot0_src2_ready)
+                        int_rs_src2_value[int_free0_idx] = slot0_src2_value;
+                    else if (phys_ready[slot0_src2_tag])
+                        int_rs_src2_value[int_free0_idx] = phys_value[slot0_src2_tag];
+                    else
+                        int_rs_src2_value[int_free0_idx] = slot0_src2_value;
                     int_rs_pred_taken[int_free0_idx] = slot0_pred_taken;
                     int_rs_pred_target[int_free0_idx] = slot0_pred_target;
                 end
@@ -1848,15 +1863,30 @@ always @(posedge clk or posedge reset) begin
                     int_rs_rob[int_slot1_idx_reg] = rob_tail;
                     int_rs_has_dest[int_slot1_idx_reg] = slot1_has_dest;
                     int_rs_dest[int_slot1_idx_reg] = slot1_dest_phys;
-                    int_rs_src0_ready[int_slot1_idx_reg] = slot1_src0_ready;
+                    int_rs_src0_ready[int_slot1_idx_reg] = slot1_src0_ready || (!slot1_src0_ready && phys_ready[slot1_src0_tag]);
                     int_rs_src0_tag[int_slot1_idx_reg] = slot1_src0_tag;
-                    int_rs_src0_value[int_slot1_idx_reg] = slot1_src0_value;
-                    int_rs_src1_ready[int_slot1_idx_reg] = slot1_src1_ready;
+                    if (slot1_src0_ready)
+                        int_rs_src0_value[int_slot1_idx_reg] = slot1_src0_value;
+                    else if (phys_ready[slot1_src0_tag])
+                        int_rs_src0_value[int_slot1_idx_reg] = phys_value[slot1_src0_tag];
+                    else
+                        int_rs_src0_value[int_slot1_idx_reg] = slot1_src0_value;
+                    int_rs_src1_ready[int_slot1_idx_reg] = slot1_src1_ready || (!slot1_src1_ready && phys_ready[slot1_src1_tag]);
                     int_rs_src1_tag[int_slot1_idx_reg] = slot1_src1_tag;
-                    int_rs_src1_value[int_slot1_idx_reg] = slot1_src1_value;
-                    int_rs_src2_ready[int_slot1_idx_reg] = slot1_src2_ready;
+                    if (slot1_src1_ready)
+                        int_rs_src1_value[int_slot1_idx_reg] = slot1_src1_value;
+                    else if (phys_ready[slot1_src1_tag])
+                        int_rs_src1_value[int_slot1_idx_reg] = phys_value[slot1_src1_tag];
+                    else
+                        int_rs_src1_value[int_slot1_idx_reg] = slot1_src1_value;
+                    int_rs_src2_ready[int_slot1_idx_reg] = slot1_src2_ready || (!slot1_src2_ready && phys_ready[slot1_src2_tag]);
                     int_rs_src2_tag[int_slot1_idx_reg] = slot1_src2_tag;
-                    int_rs_src2_value[int_slot1_idx_reg] = slot1_src2_value;
+                    if (slot1_src2_ready)
+                        int_rs_src2_value[int_slot1_idx_reg] = slot1_src2_value;
+                    else if (phys_ready[slot1_src2_tag])
+                        int_rs_src2_value[int_slot1_idx_reg] = phys_value[slot1_src2_tag];
+                    else
+                        int_rs_src2_value[int_slot1_idx_reg] = slot1_src2_value;
                     int_rs_pred_taken[int_slot1_idx_reg] = slot1_pred_taken;
                     int_rs_pred_target[int_slot1_idx_reg] = slot1_pred_target;
                 end

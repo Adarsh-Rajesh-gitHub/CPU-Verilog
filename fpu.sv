@@ -75,9 +75,11 @@ always @(*) begin
                         exp_1 = 11'd0;
                     end
                     else begin
-                        while (!mant_res[52]) begin
-                            mant_res = mant_res << 1;
-                            exp_1 = exp_1 - 1;
+                        for (i = 0; i < 52; i = i + 1) begin
+                            if ((mant_res != 0) && !mant_res[52]) begin
+                                mant_res = mant_res << 1;
+                                exp_1 = exp_1 - 1;
+                            end
                         end
                     end
                 end
@@ -137,14 +139,18 @@ always @(*) begin
                 exp_2den = (b[62:52] == 0) ? -1022 : (b[62:52] - 1023);
                 mant_1 = (a[62:52] == 0) ? {1'b0, a[51:0]} : {1'b1, a[51:0]};
                 mant_2 = (b[62:52] == 0) ? {1'b0, b[51:0]} : {1'b1, b[51:0]};
-                for(i = 0; i < 52 && mant_1 != 0 && !mant_1[52]; i = i + 1) begin
-                    mant_1 = mant_1 << 1;
-                    exp_1den = exp_1den - 1;
+                for (i = 0; i < 52; i = i + 1) begin
+                    if ((mant_1 != 0) && !mant_1[52]) begin
+                        mant_1 = mant_1 << 1;
+                        exp_1den = exp_1den - 1;
+                    end
                 end
 
-                for(i = 0; i < 52 && mant_2 != 0 && !mant_2[52]; i = i + 1) begin
-                    mant_2 = mant_2 << 1;
-                    exp_2den = exp_2den - 1;
+                for (i = 0; i < 52; i = i + 1) begin
+                    if ((mant_2 != 0) && !mant_2[52]) begin
+                        mant_2 = mant_2 << 1;
+                        exp_2den = exp_2den - 1;
+                    end
                 end
 
                 exp_resden = exp_1den - exp_2den;
