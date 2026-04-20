@@ -290,6 +290,7 @@ wire [63:0] sp_arch_data;
 wire [ROB_IDX_W-1:0] rob_head_plus1;
 wire commit0_valid;
 wire commit1_valid;
+wire commit1_fire;
 wire commit0_is_store;
 wire commit1_is_store;
 wire commit0_has_dest;
@@ -512,7 +513,8 @@ assign commit0_is_store = commit0_valid && (rob_is_store[rob_head] || rob_is_cal
 assign commit0_has_dest = commit0_valid && rob_has_dest[rob_head];
 assign commit1_is_store = commit0_valid && !rob_is_halt[rob_head] && rob_valid[rob_head_plus1] && rob_ready[rob_head_plus1] && (rob_is_store[rob_head_plus1] || rob_is_call[rob_head_plus1]);
 assign commit1_valid = commit0_valid && !rob_is_halt[rob_head] && rob_valid[rob_head_plus1] && rob_ready[rob_head_plus1] && !commit1_is_store;
-assign commit1_has_dest = commit1_valid && rob_has_dest[rob_head_plus1];
+assign commit1_fire = commit1_valid && (!recovery_valid || !rob_is_younger(rob_head, rob_head_plus1, recovery_rob));
+assign commit1_has_dest = commit1_fire && rob_has_dest[rob_head_plus1];
 
 instruction_fetch fetch(
     .clk(clk),
@@ -1537,7 +1539,7 @@ always @(posedge clk or posedge reset) begin
             end
         end
 
-        if (!hlt && commit1_valid) begin
+        if (!hlt && commit1_fire) begin
             if (commit1_has_dest) begin
                 free_list[free_tail] = rob_old_phys[rob_head_plus1];
                 free_tail = free_inc(free_tail);
@@ -1770,12 +1772,22 @@ always @(posedge clk or posedge reset) begin
                     fp_rs_op[fp_free0_idx] = fpu_op0;
                     fp_rs_rob[fp_free0_idx] = rob_tail;
                     fp_rs_dest[fp_free0_idx] = slot0_dest_phys;
-                    fp_rs_src0_ready[fp_free0_idx] = slot0_src0_ready;
+                    fp_rs_src0_ready[fp_free0_idx] = slot0_src0_ready || (!slot0_src0_ready && phys_ready[slot0_src0_tag]);
                     fp_rs_src0_tag[fp_free0_idx] = slot0_src0_tag;
-                    fp_rs_src0_value[fp_free0_idx] = slot0_src0_value;
-                    fp_rs_src1_ready[fp_free0_idx] = slot0_src1_ready;
+                    if (slot0_src0_ready)
+                        fp_rs_src0_value[fp_free0_idx] = slot0_src0_value;
+                    else if (phys_ready[slot0_src0_tag])
+                        fp_rs_src0_value[fp_free0_idx] = phys_value[slot0_src0_tag];
+                    else
+                        fp_rs_src0_value[fp_free0_idx] = slot0_src0_value;
+                    fp_rs_src1_ready[fp_free0_idx] = slot0_src1_ready || (!slot0_src1_ready && phys_ready[slot0_src1_tag]);
                     fp_rs_src1_tag[fp_free0_idx] = slot0_src1_tag;
-                    fp_rs_src1_value[fp_free0_idx] = slot0_src1_value;
+                    if (slot0_src1_ready)
+                        fp_rs_src1_value[fp_free0_idx] = slot0_src1_value;
+                    else if (phys_ready[slot0_src1_tag])
+                        fp_rs_src1_value[fp_free0_idx] = phys_value[slot0_src1_tag];
+                    else
+                        fp_rs_src1_value[fp_free0_idx] = slot0_src1_value;
                 end
                 else if (slot0_class == CLASS_LOAD || slot0_class == CLASS_STORE || slot0_class == CLASS_CALL || slot0_class == CLASS_RETURN) begin
                     lsq_valid[lsq_free0_idx] = 1'b1;
@@ -1790,12 +1802,22 @@ always @(posedge clk or posedge reset) begin
                         lsq_imm[lsq_free0_idx] = -64'd8;
                     else
                         lsq_imm[lsq_free0_idx] = zero_ext12(L0);
-                    lsq_src0_ready[lsq_free0_idx] = slot0_src0_ready;
+                    lsq_src0_ready[lsq_free0_idx] = slot0_src0_ready || (!slot0_src0_ready && phys_ready[slot0_src0_tag]);
                     lsq_src0_tag[lsq_free0_idx] = slot0_src0_tag;
-                    lsq_src0_value[lsq_free0_idx] = slot0_src0_value;
-                    lsq_src1_ready[lsq_free0_idx] = slot0_src1_ready;
+                    if (slot0_src0_ready)
+                        lsq_src0_value[lsq_free0_idx] = slot0_src0_value;
+                    else if (phys_ready[slot0_src0_tag])
+                        lsq_src0_value[lsq_free0_idx] = phys_value[slot0_src0_tag];
+                    else
+                        lsq_src0_value[lsq_free0_idx] = slot0_src0_value;
+                    lsq_src1_ready[lsq_free0_idx] = slot0_src1_ready || (!slot0_src1_ready && phys_ready[slot0_src1_tag]);
                     lsq_src1_tag[lsq_free0_idx] = slot0_src1_tag;
-                    lsq_src1_value[lsq_free0_idx] = slot0_src1_value;
+                    if (slot0_src1_ready)
+                        lsq_src1_value[lsq_free0_idx] = slot0_src1_value;
+                    else if (phys_ready[slot0_src1_tag])
+                        lsq_src1_value[lsq_free0_idx] = phys_value[slot0_src1_tag];
+                    else
+                        lsq_src1_value[lsq_free0_idx] = slot0_src1_value;
                     lsq_addr_ready[lsq_free0_idx] = 1'b0;
                     lsq_addr[lsq_free0_idx] = 64'd0;
                     lsq_data_ready[lsq_free0_idx] = 1'b0;
@@ -1895,12 +1917,22 @@ always @(posedge clk or posedge reset) begin
                     fp_rs_op[fp_slot1_idx_reg] = fpu_op1;
                     fp_rs_rob[fp_slot1_idx_reg] = rob_tail;
                     fp_rs_dest[fp_slot1_idx_reg] = slot1_dest_phys;
-                    fp_rs_src0_ready[fp_slot1_idx_reg] = slot1_src0_ready;
+                    fp_rs_src0_ready[fp_slot1_idx_reg] = slot1_src0_ready || (!slot1_src0_ready && phys_ready[slot1_src0_tag]);
                     fp_rs_src0_tag[fp_slot1_idx_reg] = slot1_src0_tag;
-                    fp_rs_src0_value[fp_slot1_idx_reg] = slot1_src0_value;
-                    fp_rs_src1_ready[fp_slot1_idx_reg] = slot1_src1_ready;
+                    if (slot1_src0_ready)
+                        fp_rs_src0_value[fp_slot1_idx_reg] = slot1_src0_value;
+                    else if (phys_ready[slot1_src0_tag])
+                        fp_rs_src0_value[fp_slot1_idx_reg] = phys_value[slot1_src0_tag];
+                    else
+                        fp_rs_src0_value[fp_slot1_idx_reg] = slot1_src0_value;
+                    fp_rs_src1_ready[fp_slot1_idx_reg] = slot1_src1_ready || (!slot1_src1_ready && phys_ready[slot1_src1_tag]);
                     fp_rs_src1_tag[fp_slot1_idx_reg] = slot1_src1_tag;
-                    fp_rs_src1_value[fp_slot1_idx_reg] = slot1_src1_value;
+                    if (slot1_src1_ready)
+                        fp_rs_src1_value[fp_slot1_idx_reg] = slot1_src1_value;
+                    else if (phys_ready[slot1_src1_tag])
+                        fp_rs_src1_value[fp_slot1_idx_reg] = phys_value[slot1_src1_tag];
+                    else
+                        fp_rs_src1_value[fp_slot1_idx_reg] = slot1_src1_value;
                 end
                 else if (slot1_class == CLASS_LOAD || slot1_class == CLASS_STORE || slot1_class == CLASS_CALL || slot1_class == CLASS_RETURN) begin
                     lsq_valid[lsq_slot1_idx_reg] = 1'b1;
@@ -1915,12 +1947,22 @@ always @(posedge clk or posedge reset) begin
                         lsq_imm[lsq_slot1_idx_reg] = -64'd8;
                     else
                         lsq_imm[lsq_slot1_idx_reg] = zero_ext12(L1);
-                    lsq_src0_ready[lsq_slot1_idx_reg] = slot1_src0_ready;
+                    lsq_src0_ready[lsq_slot1_idx_reg] = slot1_src0_ready || (!slot1_src0_ready && phys_ready[slot1_src0_tag]);
                     lsq_src0_tag[lsq_slot1_idx_reg] = slot1_src0_tag;
-                    lsq_src0_value[lsq_slot1_idx_reg] = slot1_src0_value;
-                    lsq_src1_ready[lsq_slot1_idx_reg] = slot1_src1_ready;
+                    if (slot1_src0_ready)
+                        lsq_src0_value[lsq_slot1_idx_reg] = slot1_src0_value;
+                    else if (phys_ready[slot1_src0_tag])
+                        lsq_src0_value[lsq_slot1_idx_reg] = phys_value[slot1_src0_tag];
+                    else
+                        lsq_src0_value[lsq_slot1_idx_reg] = slot1_src0_value;
+                    lsq_src1_ready[lsq_slot1_idx_reg] = slot1_src1_ready || (!slot1_src1_ready && phys_ready[slot1_src1_tag]);
                     lsq_src1_tag[lsq_slot1_idx_reg] = slot1_src1_tag;
-                    lsq_src1_value[lsq_slot1_idx_reg] = slot1_src1_value;
+                    if (slot1_src1_ready)
+                        lsq_src1_value[lsq_slot1_idx_reg] = slot1_src1_value;
+                    else if (phys_ready[slot1_src1_tag])
+                        lsq_src1_value[lsq_slot1_idx_reg] = phys_value[slot1_src1_tag];
+                    else
+                        lsq_src1_value[lsq_slot1_idx_reg] = slot1_src1_value;
                     lsq_addr_ready[lsq_slot1_idx_reg] = 1'b0;
                     lsq_addr[lsq_slot1_idx_reg] = 64'd0;
                     lsq_data_ready[lsq_slot1_idx_reg] = 1'b0;

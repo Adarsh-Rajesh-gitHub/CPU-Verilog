@@ -155,15 +155,23 @@ always @(*) begin
 
                 exp_resden = exp_1den - exp_2den;
 
-                div_num = ({53'd0, mant_1} << 52);
+                div_num = ({53'd0, mant_1} << 53);
                 temp_big = div_num / mant_2;
                 div_rem = div_num % mant_2;
-                temp = {1'b0, temp_big[52:0]};
                 div_round_up = 1'b0;
-                if (({1'b0, div_rem} << 1) > {1'b0, mant_2})
-                    div_round_up = 1'b1;
-                else if ((({1'b0, div_rem} << 1) == {1'b0, mant_2}) && temp[0])
-                    div_round_up = 1'b1;
+                if (temp_big[53]) begin
+                    temp = {1'b0, temp_big[53:1]};
+                    if (temp_big[0] && ((div_rem != 0) || temp_big[1]))
+                        div_round_up = 1'b1;
+                end
+                else begin
+                    temp = {1'b0, temp_big[52:0]};
+                    exp_resden = exp_resden - 1;
+                    if (({1'b0, div_rem} << 1) > {1'b0, mant_2})
+                        div_round_up = 1'b1;
+                    else if ((({1'b0, div_rem} << 1) == {1'b0, mant_2}) && temp[0])
+                        div_round_up = 1'b1;
+                end
                 if (div_round_up)
                     temp = temp + 1'b1;
 
@@ -173,11 +181,6 @@ always @(*) begin
                 end
                 else begin
                     mant_res = temp[52:0];
-                end
-
-                if(mant_res < (53'd1 << 52)) begin
-                    mant_res = mant_res << 1;
-                    exp_resden = exp_resden - 1;
                 end
 
                 if(exp_resden < -1022) begin
@@ -198,15 +201,23 @@ always @(*) begin
                 mant_2 = (b[62:52] == 0) ? {1'b0, b[51:0]} : {1'b1, b[51:0]};
 
                 exp_res = exp_1 - exp_2 + 1023;
-                div_num = ({53'd0, mant_1} << 52);
+                div_num = ({53'd0, mant_1} << 53);
                 temp_big = div_num / mant_2;
                 div_rem = div_num % mant_2;
-                temp = {1'b0, temp_big[52:0]};
                 div_round_up = 1'b0;
-                if (({1'b0, div_rem} << 1) > {1'b0, mant_2})
-                    div_round_up = 1'b1;
-                else if ((({1'b0, div_rem} << 1) == {1'b0, mant_2}) && temp[0])
-                    div_round_up = 1'b1;
+                if (temp_big[53]) begin
+                    temp = {1'b0, temp_big[53:1]};
+                    if (temp_big[0] && ((div_rem != 0) || temp_big[1]))
+                        div_round_up = 1'b1;
+                end
+                else begin
+                    temp = {1'b0, temp_big[52:0]};
+                    exp_res = exp_res - 1;
+                    if (({1'b0, div_rem} << 1) > {1'b0, mant_2})
+                        div_round_up = 1'b1;
+                    else if ((({1'b0, div_rem} << 1) == {1'b0, mant_2}) && temp[0])
+                        div_round_up = 1'b1;
+                end
                 if (div_round_up)
                     temp = temp + 1'b1;
 
@@ -216,16 +227,6 @@ always @(*) begin
                 end
                 else begin
                     mant_res = temp[52:0];
-                end
-
-                if (mant_res < (53'd1 << 52)) begin
-                    if (exp_res > 1) begin
-                        mant_res = mant_res << 1;
-                        exp_res = exp_res - 1;
-                    end
-                    else begin
-                        exp_res = 0;
-                    end
                 end
 
                 result = {sign, exp_res[10:0], mant_res[51:0]};
