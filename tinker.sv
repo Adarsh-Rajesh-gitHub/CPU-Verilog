@@ -19,7 +19,7 @@ localparam ROB_IDX_W = 4;
 localparam INT_RS_SIZE = 8;
 localparam FP_RS_SIZE = 8;
 localparam LSQ_SIZE = 8;
-localparam FPU_LAT = 4;
+localparam FPU_LAT = 4; // unpack/align, execute, normalize, round-pack
 localparam PRED_SIZE = 8;
 localparam PRED_IDX_W = 3;
 
