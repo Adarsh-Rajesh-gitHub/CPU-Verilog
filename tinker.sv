@@ -19,7 +19,7 @@ localparam ROB_IDX_W = 4;
 localparam INT_RS_SIZE = 8;
 localparam FP_RS_SIZE = 8;
 localparam LSQ_SIZE = 8;
-localparam FPU_LAT = 4; // unpack/align, execute, normalize, round-pack
+localparam FPU_LAT = 5; // unpack/decode, align, execute, normalize, round-pack
 localparam PRED_SIZE = 8;
 localparam PRED_IDX_W = 3;
 
@@ -213,7 +213,6 @@ reg [63:0] alu_pipe_pc [0:1];
 reg fpu_pipe_valid [0:1][0:FPU_LAT-1];
 reg [ROB_IDX_W-1:0] fpu_pipe_rob [0:1][0:FPU_LAT-1];
 reg [PHYS_TAG_W-1:0] fpu_pipe_dest [0:1][0:FPU_LAT-1];
-reg [63:0] fpu_pipe_value [0:1][0:FPU_LAT-1];
 
 reg lsu_pipe_valid;
 reg lsu_pipe_has_dest;
@@ -406,6 +405,8 @@ wire [63:0] alu0_result;
 wire [63:0] alu1_result;
 wire [63:0] fpu0_result;
 wire [63:0] fpu1_result;
+wire fpu0_out_valid;
+wire fpu1_out_valid;
 
 reg [4:0] int_best0;
 reg [4:0] int_best1;
@@ -621,16 +622,24 @@ alu alu1(
 );
 
 fpu fpu(
+    .clk(clk),
+    .reset(reset),
+    .in_valid(issue_fp0_valid && !hlt && !recovery_valid),
     .a(issue_fp0_a),
     .b(issue_fp0_b),
     .fpu_op(issue_fp0_op),
+    .out_valid(fpu0_out_valid),
     .result(fpu0_result)
 );
 
 fpu fpu1(
+    .clk(clk),
+    .reset(reset),
+    .in_valid(issue_fp1_valid && !hlt && !recovery_valid),
     .a(issue_fp1_a),
     .b(issue_fp1_b),
     .fpu_op(issue_fp1_op),
+    .out_valid(fpu1_out_valid),
     .result(fpu1_result)
 );
 
@@ -1385,7 +1394,6 @@ always @(posedge clk or posedge reset) begin
                 fpu_pipe_valid[u][s] = 1'b0;
                 fpu_pipe_rob[u][s] = {ROB_IDX_W{1'b0}};
                 fpu_pipe_dest[u][s] = {PHYS_TAG_W{1'b0}};
-                fpu_pipe_value[u][s] = 64'd0;
             end
         end
         for (i = 0; i < PRED_SIZE; i = i + 1) begin
@@ -1444,14 +1452,22 @@ always @(posedge clk or posedge reset) begin
             end
         end
 
-        for (u = 0; u < 2; u = u + 1) begin
-            if (fpu_pipe_valid[u][FPU_LAT - 1] && !(recovery_valid && rob_is_younger(rob_head, fpu_pipe_rob[u][FPU_LAT - 1], recovery_rob))) begin
-                phys_value[fpu_pipe_dest[u][FPU_LAT - 1]] = fpu_pipe_value[u][FPU_LAT - 1];
-                phys_ready[fpu_pipe_dest[u][FPU_LAT - 1]] = 1'b1;
-                rob_value[fpu_pipe_rob[u][FPU_LAT - 1]] = fpu_pipe_value[u][FPU_LAT - 1];
-                rob_ready[fpu_pipe_rob[u][FPU_LAT - 1]] = 1'b1;
-                broadcast_result(fpu_pipe_dest[u][FPU_LAT - 1], fpu_pipe_value[u][FPU_LAT - 1]);
-            end
+        if (fpu0_out_valid && fpu_pipe_valid[0][FPU_LAT - 1] &&
+            !(recovery_valid && rob_is_younger(rob_head, fpu_pipe_rob[0][FPU_LAT - 1], recovery_rob))) begin
+            phys_value[fpu_pipe_dest[0][FPU_LAT - 1]] = fpu0_result;
+            phys_ready[fpu_pipe_dest[0][FPU_LAT - 1]] = 1'b1;
+            rob_value[fpu_pipe_rob[0][FPU_LAT - 1]] = fpu0_result;
+            rob_ready[fpu_pipe_rob[0][FPU_LAT - 1]] = 1'b1;
+            broadcast_result(fpu_pipe_dest[0][FPU_LAT - 1], fpu0_result);
+        end
+
+        if (fpu1_out_valid && fpu_pipe_valid[1][FPU_LAT - 1] &&
+            !(recovery_valid && rob_is_younger(rob_head, fpu_pipe_rob[1][FPU_LAT - 1], recovery_rob))) begin
+            phys_value[fpu_pipe_dest[1][FPU_LAT - 1]] = fpu1_result;
+            phys_ready[fpu_pipe_dest[1][FPU_LAT - 1]] = 1'b1;
+            rob_value[fpu_pipe_rob[1][FPU_LAT - 1]] = fpu1_result;
+            rob_ready[fpu_pipe_rob[1][FPU_LAT - 1]] = 1'b1;
+            broadcast_result(fpu_pipe_dest[1][FPU_LAT - 1], fpu1_result);
         end
 
         if (lsu_pipe_valid && !(recovery_valid && rob_is_younger(rob_head, lsu_pipe_rob, recovery_rob))) begin
@@ -1570,7 +1586,6 @@ always @(posedge clk or posedge reset) begin
                 fpu_pipe_valid[u][s] = fpu_pipe_valid[u][s - 1];
                 fpu_pipe_rob[u][s] = fpu_pipe_rob[u][s - 1];
                 fpu_pipe_dest[u][s] = fpu_pipe_dest[u][s - 1];
-                fpu_pipe_value[u][s] = fpu_pipe_value[u][s - 1];
             end
             fpu_pipe_valid[u][0] = 1'b0;
         end
@@ -1616,7 +1631,6 @@ always @(posedge clk or posedge reset) begin
                 fpu_pipe_valid[0][0] = 1'b1;
                 fpu_pipe_rob[0][0] = fp_rs_rob[issue_fp0_idx];
                 fpu_pipe_dest[0][0] = fp_rs_dest[issue_fp0_idx];
-                fpu_pipe_value[0][0] = fpu0_result;
                 fp_rs_valid[issue_fp0_idx] = 1'b0;
             end
 
@@ -1624,7 +1638,6 @@ always @(posedge clk or posedge reset) begin
                 fpu_pipe_valid[1][0] = 1'b1;
                 fpu_pipe_rob[1][0] = fp_rs_rob[issue_fp1_idx];
                 fpu_pipe_dest[1][0] = fp_rs_dest[issue_fp1_idx];
-                fpu_pipe_value[1][0] = fpu1_result;
                 fp_rs_valid[issue_fp1_idx] = 1'b0;
             end
 
