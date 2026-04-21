@@ -214,18 +214,18 @@ reg fpu_pipe_valid [0:1][0:FPU_LAT-1];
 reg [ROB_IDX_W-1:0] fpu_pipe_rob [0:1][0:FPU_LAT-1];
 reg [PHYS_TAG_W-1:0] fpu_pipe_dest [0:1][0:FPU_LAT-1];
 
-reg lsu_pipe_valid;
-reg lsu_pipe_has_dest;
-reg lsu_pipe_is_call;
-reg lsu_pipe_is_return;
-reg [ROB_IDX_W-1:0] lsu_pipe_rob;
-reg [PHYS_TAG_W-1:0] lsu_pipe_dest;
-reg [63:0] lsu_pipe_value;
-reg lsu_pipe_pred_taken;
-reg [63:0] lsu_pipe_pred_target;
-reg lsu_pipe_actual_taken;
-reg [63:0] lsu_pipe_actual_target;
-reg [63:0] lsu_pipe_pc;
+reg lsu_pipe_valid [0:1];
+reg lsu_pipe_has_dest [0:1];
+reg lsu_pipe_is_call [0:1];
+reg lsu_pipe_is_return [0:1];
+reg [ROB_IDX_W-1:0] lsu_pipe_rob [0:1];
+reg [PHYS_TAG_W-1:0] lsu_pipe_dest [0:1];
+reg [63:0] lsu_pipe_value [0:1];
+reg lsu_pipe_pred_taken [0:1];
+reg [63:0] lsu_pipe_pred_target [0:1];
+reg lsu_pipe_actual_taken [0:1];
+reg [63:0] lsu_pipe_actual_target [0:1];
+reg [63:0] lsu_pipe_pc [0:1];
 
 reg [1:0] bht [0:PRED_SIZE-1];
 reg btb_valid [0:PRED_SIZE-1];
@@ -236,9 +236,10 @@ wire [63:0] pc;
 reg [63:0] next_pc;
 wire [31:0] instruction0;
 wire [31:0] instruction1;
-wire [63:0] unused_data_read;
-reg [63:0] load_mem_addr;
-wire [63:0] load_mem_data;
+reg [63:0] load_mem_addr0;
+reg [63:0] load_mem_addr1;
+wire [63:0] load_mem_data0;
+wire [63:0] load_mem_data1;
 
 wire [4:0] opcode0;
 wire [4:0] rd0;
@@ -350,16 +351,26 @@ reg [63:0] issue_fp1_a;
 reg [63:0] issue_fp1_b;
 reg [4:0] issue_fp1_op;
 
-reg issue_lsu_valid;
-reg [2:0] issue_lsu_idx;
-reg issue_lsu_has_dest;
-reg issue_lsu_is_call;
-reg issue_lsu_is_return;
-reg [63:0] issue_lsu_value;
-reg issue_lsu_pred_taken;
-reg [63:0] issue_lsu_pred_target;
-reg issue_lsu_actual_taken;
-reg [63:0] issue_lsu_actual_target;
+reg issue_lsu0_valid;
+reg issue_lsu1_valid;
+reg [2:0] issue_lsu0_idx;
+reg [2:0] issue_lsu1_idx;
+reg issue_lsu0_has_dest;
+reg issue_lsu1_has_dest;
+reg issue_lsu0_is_call;
+reg issue_lsu1_is_call;
+reg issue_lsu0_is_return;
+reg issue_lsu1_is_return;
+reg [63:0] issue_lsu0_value;
+reg [63:0] issue_lsu1_value;
+reg issue_lsu0_pred_taken;
+reg issue_lsu1_pred_taken;
+reg [63:0] issue_lsu0_pred_target;
+reg [63:0] issue_lsu1_pred_target;
+reg issue_lsu0_actual_taken;
+reg issue_lsu1_actual_taken;
+reg [63:0] issue_lsu0_actual_target;
+reg [63:0] issue_lsu1_actual_target;
 
 reg dispatch0_valid;
 reg dispatch1_valid;
@@ -415,6 +426,7 @@ reg [4:0] fp_best0;
 reg [4:0] fp_best1;
 reg [4:0] fp_curd;
 reg [4:0] lsu_best_load_dist;
+reg [4:0] lsu_best_load_dist1;
 reg [4:0] lsu_load_dist;
 reg [4:0] lsu_store_dist;
 reg [4:0] lsu_best_store_dist;
@@ -531,12 +543,12 @@ memory memory(
     .instruction(instruction0),
     .pc_b(pc + 64'd4),
     .instruction_b(instruction1),
-    .data_addr(commit0_is_store ? rob_store_addr[rob_head] : 64'd0),
+    .data_addr(commit0_is_store ? rob_store_addr[rob_head] : load_mem_addr1),
     .write_data(commit0_is_store ? rob_store_data[rob_head] : 64'd0),
     .mem_write(commit0_is_store && !hlt),
-    .data_read(unused_data_read),
-    .data_addr_b(load_mem_addr),
-    .data_read_b(load_mem_data)
+    .data_read(load_mem_data1),
+    .data_addr_b(load_mem_addr0),
+    .data_read_b(load_mem_data0)
 );
 
 instruction_decoder decoder0(
@@ -732,13 +744,15 @@ always @(*) begin
         end
     end
 
-    if (lsu_pipe_valid && (lsu_pipe_is_call || lsu_pipe_is_return)) begin
-        if ((lsu_pipe_actual_taken != lsu_pipe_pred_taken) ||
-            (lsu_pipe_actual_taken && lsu_pipe_pred_taken && (lsu_pipe_actual_target != lsu_pipe_pred_target))) begin
-            if (!recovery_valid || rob_is_younger(rob_head, recovery_rob, lsu_pipe_rob)) begin
-                recovery_valid = 1'b1;
-                recovery_rob = lsu_pipe_rob;
-                recovery_target = lsu_pipe_actual_taken ? lsu_pipe_actual_target : (lsu_pipe_pc + 64'd4);
+    for (u = 0; u < 2; u = u + 1) begin
+        if (lsu_pipe_valid[u] && (lsu_pipe_is_call[u] || lsu_pipe_is_return[u])) begin
+            if ((lsu_pipe_actual_taken[u] != lsu_pipe_pred_taken[u]) ||
+                (lsu_pipe_actual_taken[u] && lsu_pipe_pred_taken[u] && (lsu_pipe_actual_target[u] != lsu_pipe_pred_target[u]))) begin
+                if (!recovery_valid || rob_is_younger(rob_head, recovery_rob, lsu_pipe_rob[u])) begin
+                    recovery_valid = 1'b1;
+                    recovery_rob = lsu_pipe_rob[u];
+                    recovery_target = lsu_pipe_actual_taken[u] ? lsu_pipe_actual_target[u] : (lsu_pipe_pc[u] + 64'd4);
+                end
             end
         end
     end
@@ -900,18 +914,30 @@ always @(*) begin
 end
 
 always @(*) begin
-    issue_lsu_valid = 1'b0;
-    issue_lsu_idx = 3'd0;
-    issue_lsu_has_dest = 1'b0;
-    issue_lsu_is_call = 1'b0;
-    issue_lsu_is_return = 1'b0;
-    issue_lsu_value = 64'd0;
-    issue_lsu_pred_taken = 1'b0;
-    issue_lsu_pred_target = 64'd0;
-    issue_lsu_actual_taken = 1'b0;
-    issue_lsu_actual_target = 64'd0;
-    load_mem_addr = 64'd0;
+    issue_lsu0_valid = 1'b0;
+    issue_lsu1_valid = 1'b0;
+    issue_lsu0_idx = 3'd0;
+    issue_lsu1_idx = 3'd0;
+    issue_lsu0_has_dest = 1'b0;
+    issue_lsu1_has_dest = 1'b0;
+    issue_lsu0_is_call = 1'b0;
+    issue_lsu1_is_call = 1'b0;
+    issue_lsu0_is_return = 1'b0;
+    issue_lsu1_is_return = 1'b0;
+    issue_lsu0_value = 64'd0;
+    issue_lsu1_value = 64'd0;
+    issue_lsu0_pred_taken = 1'b0;
+    issue_lsu1_pred_taken = 1'b0;
+    issue_lsu0_pred_target = 64'd0;
+    issue_lsu1_pred_target = 64'd0;
+    issue_lsu0_actual_taken = 1'b0;
+    issue_lsu1_actual_taken = 1'b0;
+    issue_lsu0_actual_target = 64'd0;
+    issue_lsu1_actual_target = 64'd0;
+    load_mem_addr0 = 64'd0;
+    load_mem_addr1 = 64'd0;
     lsu_best_load_dist = ROB_SIZE;
+    lsu_best_load_dist1 = ROB_SIZE;
 
     for (i = 0; i < LSQ_SIZE; i = i + 1) begin
         if (lsq_valid[i]) begin
@@ -948,27 +974,121 @@ always @(*) begin
                 end
             end
 
-            if (lsu_safe && (!issue_lsu_valid || (lsu_load_dist < lsu_best_load_dist))) begin
-                issue_lsu_valid = 1'b1;
-                issue_lsu_idx = i[2:0];
+            if (lsu_safe && (!issue_lsu0_valid || (lsu_load_dist < lsu_best_load_dist))) begin
+                issue_lsu0_valid = 1'b1;
+                issue_lsu0_idx = i[2:0];
                 lsu_best_load_dist = lsu_load_dist;
-                issue_lsu_has_dest = lsq_is_load[i];
-                issue_lsu_is_call = lsq_is_call[i];
-                issue_lsu_is_return = lsq_is_return[i];
-                issue_lsu_pred_taken = lsq_pred_taken[i];
-                issue_lsu_pred_target = lsq_pred_target[i];
-                if (lsq_is_call[i]) begin
-                    issue_lsu_actual_taken = 1'b1;
-                    issue_lsu_actual_target = lsq_src1_value[i];
-                    issue_lsu_value = 64'd0;
-                end
-                else begin
-                    load_mem_addr = lsq_addr[i];
-                    issue_lsu_value = lsu_forward_hit ? lsu_forward_data : load_mem_data;
-                    issue_lsu_actual_taken = lsq_is_return[i];
-                    issue_lsu_actual_target = lsu_forward_hit ? lsu_forward_data : load_mem_data;
+            end
+        end
+    end
+
+    for (i = 0; i < LSQ_SIZE; i = i + 1) begin
+        if (lsq_valid[i] && (!issue_lsu0_valid || (i[2:0] != issue_lsu0_idx)) &&
+            (lsq_is_call[i] || !commit0_is_store)) begin
+            lsu_load_dist = rob_distance(rob_head, lsq_rob[i]);
+            lsu_safe = 1'b0;
+            lsu_forward_hit = 1'b0;
+            lsu_forward_data = 64'd0;
+            lsu_best_store_dist = 5'd0;
+
+            if (lsq_is_call[i] && !lsq_control_issued[i] && lsq_src1_ready[i] && lsq_addr_ready[i] && lsq_data_ready[i]) begin
+                lsu_safe = 1'b1;
+            end
+            else if ((lsq_is_load[i] || lsq_is_return[i]) && lsq_addr_ready[i]) begin
+                lsu_safe = 1'b1;
+                for (j = 0; j < LSQ_SIZE; j = j + 1) begin
+                    if (lsq_valid[j] && (lsq_is_store[j] || lsq_is_call[j]) && rob_is_younger(rob_head, lsq_rob[i], lsq_rob[j])) begin
+                        if (!lsq_addr_ready[j]) begin
+                            lsu_safe = 1'b0;
+                        end
+                        else if (lsq_addr[j] == lsq_addr[i]) begin
+                            if (!lsq_data_ready[j]) begin
+                                lsu_safe = 1'b0;
+                            end
+                            else begin
+                                lsu_store_dist = rob_distance(rob_head, lsq_rob[j]);
+                                if (!lsu_forward_hit || (lsu_store_dist > lsu_best_store_dist)) begin
+                                    lsu_forward_hit = 1'b1;
+                                    lsu_forward_data = lsq_data[j];
+                                    lsu_best_store_dist = lsu_store_dist;
+                                end
+                            end
+                        end
+                    end
                 end
             end
+
+            if (lsu_safe && (!issue_lsu1_valid || (lsu_load_dist < lsu_best_load_dist1))) begin
+                issue_lsu1_valid = 1'b1;
+                issue_lsu1_idx = i[2:0];
+                lsu_best_load_dist1 = lsu_load_dist;
+            end
+        end
+    end
+
+    if (issue_lsu0_valid) begin
+        issue_lsu0_has_dest = lsq_is_load[issue_lsu0_idx];
+        issue_lsu0_is_call = lsq_is_call[issue_lsu0_idx];
+        issue_lsu0_is_return = lsq_is_return[issue_lsu0_idx];
+        issue_lsu0_pred_taken = lsq_pred_taken[issue_lsu0_idx];
+        issue_lsu0_pred_target = lsq_pred_target[issue_lsu0_idx];
+        if (lsq_is_call[issue_lsu0_idx]) begin
+            issue_lsu0_actual_taken = 1'b1;
+            issue_lsu0_actual_target = lsq_src1_value[issue_lsu0_idx];
+        end
+        else begin
+            load_mem_addr0 = lsq_addr[issue_lsu0_idx];
+            lsu_forward_hit = 1'b0;
+            lsu_forward_data = 64'd0;
+            lsu_best_store_dist = 5'd0;
+            for (j = 0; j < LSQ_SIZE; j = j + 1) begin
+                if (lsq_valid[j] && (lsq_is_store[j] || lsq_is_call[j]) &&
+                    rob_is_younger(rob_head, lsq_rob[issue_lsu0_idx], lsq_rob[j]) &&
+                    lsq_addr_ready[j] && (lsq_addr[j] == lsq_addr[issue_lsu0_idx]) && lsq_data_ready[j]) begin
+                    lsu_store_dist = rob_distance(rob_head, lsq_rob[j]);
+                    if (!lsu_forward_hit || (lsu_store_dist > lsu_best_store_dist)) begin
+                        lsu_forward_hit = 1'b1;
+                        lsu_forward_data = lsq_data[j];
+                        lsu_best_store_dist = lsu_store_dist;
+                    end
+                end
+            end
+            issue_lsu0_value = lsu_forward_hit ? lsu_forward_data : load_mem_data0;
+            issue_lsu0_actual_taken = lsq_is_return[issue_lsu0_idx];
+            issue_lsu0_actual_target = lsu_forward_hit ? lsu_forward_data : load_mem_data0;
+        end
+    end
+
+    if (issue_lsu1_valid) begin
+        issue_lsu1_has_dest = lsq_is_load[issue_lsu1_idx];
+        issue_lsu1_is_call = lsq_is_call[issue_lsu1_idx];
+        issue_lsu1_is_return = lsq_is_return[issue_lsu1_idx];
+        issue_lsu1_pred_taken = lsq_pred_taken[issue_lsu1_idx];
+        issue_lsu1_pred_target = lsq_pred_target[issue_lsu1_idx];
+        if (lsq_is_call[issue_lsu1_idx]) begin
+            issue_lsu1_actual_taken = 1'b1;
+            issue_lsu1_actual_target = lsq_src1_value[issue_lsu1_idx];
+        end
+        else begin
+            load_mem_addr1 = lsq_addr[issue_lsu1_idx];
+            lsu_forward_hit = 1'b0;
+            lsu_forward_data = 64'd0;
+            lsu_best_store_dist = 5'd0;
+            for (j = 0; j < LSQ_SIZE; j = j + 1) begin
+                if (lsq_valid[j] && (lsq_is_store[j] || lsq_is_call[j]) &&
+                    rob_is_younger(rob_head, lsq_rob[issue_lsu1_idx], lsq_rob[j]) &&
+                    lsq_addr_ready[j] && (lsq_addr[j] == lsq_addr[issue_lsu1_idx]) && lsq_data_ready[j]) begin
+                    lsu_store_dist = rob_distance(rob_head, lsq_rob[j]);
+                    if (!lsu_forward_hit || (lsu_store_dist > lsu_best_store_dist)) begin
+                        lsu_forward_hit = 1'b1;
+                        lsu_forward_data = lsq_data[j];
+                        lsu_best_store_dist = lsu_store_dist;
+                    end
+                end
+            end
+            issue_lsu1_value = lsu_forward_hit ? lsu_forward_data : load_mem_data1;
+            issue_lsu1_actual_taken = lsq_is_return[issue_lsu1_idx];
+            issue_lsu1_actual_target = lsu_forward_hit ? lsu_forward_data : load_mem_data1;
         end
     end
 end
@@ -1265,18 +1385,6 @@ always @(posedge clk or posedge reset) begin
         free_count = 7'd32;
         rob_head = {ROB_IDX_W{1'b0}};
         rob_tail = {ROB_IDX_W{1'b0}};
-        lsu_pipe_valid = 1'b0;
-        lsu_pipe_has_dest = 1'b0;
-        lsu_pipe_is_call = 1'b0;
-        lsu_pipe_is_return = 1'b0;
-        lsu_pipe_rob = {ROB_IDX_W{1'b0}};
-        lsu_pipe_dest = {PHYS_TAG_W{1'b0}};
-        lsu_pipe_value = 64'd0;
-        lsu_pipe_pred_taken = 1'b0;
-        lsu_pipe_pred_target = 64'd0;
-        lsu_pipe_actual_taken = 1'b0;
-        lsu_pipe_actual_target = 64'd0;
-        lsu_pipe_pc = 64'd0;
         for (i = 0; i < ARCH_REGS; i = i + 1) begin
             rat[i] = {1'b0, i[4:0]};
         end
@@ -1390,6 +1498,18 @@ always @(posedge clk or posedge reset) begin
             alu_pipe_actual_taken[u] = 1'b0;
             alu_pipe_actual_target[u] = 64'd0;
             alu_pipe_pc[u] = 64'd0;
+            lsu_pipe_valid[u] = 1'b0;
+            lsu_pipe_has_dest[u] = 1'b0;
+            lsu_pipe_is_call[u] = 1'b0;
+            lsu_pipe_is_return[u] = 1'b0;
+            lsu_pipe_rob[u] = {ROB_IDX_W{1'b0}};
+            lsu_pipe_dest[u] = {PHYS_TAG_W{1'b0}};
+            lsu_pipe_value[u] = 64'd0;
+            lsu_pipe_pred_taken[u] = 1'b0;
+            lsu_pipe_pred_target[u] = 64'd0;
+            lsu_pipe_actual_taken[u] = 1'b0;
+            lsu_pipe_actual_target[u] = 64'd0;
+            lsu_pipe_pc[u] = 64'd0;
             for (s = 0; s < FPU_LAT; s = s + 1) begin
                 fpu_pipe_valid[u][s] = 1'b0;
                 fpu_pipe_rob[u][s] = {ROB_IDX_W{1'b0}};
@@ -1470,27 +1590,29 @@ always @(posedge clk or posedge reset) begin
             broadcast_result(fpu_pipe_dest[1][FPU_LAT - 1], fpu1_result);
         end
 
-        if (lsu_pipe_valid && !(recovery_valid && rob_is_younger(rob_head, lsu_pipe_rob, recovery_rob))) begin
-            if (lsu_pipe_has_dest) begin
-                phys_value[lsu_pipe_dest] = lsu_pipe_value;
-                phys_ready[lsu_pipe_dest] = 1'b1;
-                rob_value[lsu_pipe_rob] = lsu_pipe_value;
-                rob_ready[lsu_pipe_rob] = 1'b1;
-                broadcast_result(lsu_pipe_dest, lsu_pipe_value);
-            end
-            else begin
-                if (lsu_pipe_actual_taken) begin
-                    btb_valid[pred_index(lsu_pipe_pc)] = 1'b1;
-                    btb_tag[pred_index(lsu_pipe_pc)] = lsu_pipe_pc[63:5];
-                    btb_target[pred_index(lsu_pipe_pc)] = lsu_pipe_actual_target;
-                end
-                if (lsu_pipe_is_return) begin
-                    rob_ready[lsu_pipe_rob] = 1'b1;
+        for (u = 0; u < 2; u = u + 1) begin
+            if (lsu_pipe_valid[u] && !(recovery_valid && rob_is_younger(rob_head, lsu_pipe_rob[u], recovery_rob))) begin
+                if (lsu_pipe_has_dest[u]) begin
+                    phys_value[lsu_pipe_dest[u]] = lsu_pipe_value[u];
+                    phys_ready[lsu_pipe_dest[u]] = 1'b1;
+                    rob_value[lsu_pipe_rob[u]] = lsu_pipe_value[u];
+                    rob_ready[lsu_pipe_rob[u]] = 1'b1;
+                    broadcast_result(lsu_pipe_dest[u], lsu_pipe_value[u]);
                 end
                 else begin
-                    for (i = 0; i < LSQ_SIZE; i = i + 1) begin
-                        if (lsq_valid[i] && lsq_is_call[i] && (lsq_rob[i] == lsu_pipe_rob)) begin
-                            lsq_control_done[i] = 1'b1;
+                    if (lsu_pipe_actual_taken[u]) begin
+                        btb_valid[pred_index(lsu_pipe_pc[u])] = 1'b1;
+                        btb_tag[pred_index(lsu_pipe_pc[u])] = lsu_pipe_pc[u][63:5];
+                        btb_target[pred_index(lsu_pipe_pc[u])] = lsu_pipe_actual_target[u];
+                    end
+                    if (lsu_pipe_is_return[u]) begin
+                        rob_ready[lsu_pipe_rob[u]] = 1'b1;
+                    end
+                    else begin
+                        for (i = 0; i < LSQ_SIZE; i = i + 1) begin
+                            if (lsq_valid[i] && lsq_is_call[i] && (lsq_rob[i] == lsu_pipe_rob[u])) begin
+                                lsq_control_done[i] = 1'b1;
+                            end
                         end
                     end
                 end
@@ -1592,7 +1714,8 @@ always @(posedge clk or posedge reset) begin
 
         alu_pipe_valid[0] = 1'b0;
         alu_pipe_valid[1] = 1'b0;
-        lsu_pipe_valid = 1'b0;
+        lsu_pipe_valid[0] = 1'b0;
+        lsu_pipe_valid[1] = 1'b0;
 
         if (!hlt && !recovery_valid) begin
             if (issue_int0_valid) begin
@@ -1641,24 +1764,45 @@ always @(posedge clk or posedge reset) begin
                 fp_rs_valid[issue_fp1_idx] = 1'b0;
             end
 
-            if (issue_lsu_valid) begin
-                lsu_pipe_valid = 1'b1;
-                lsu_pipe_has_dest = issue_lsu_has_dest;
-                lsu_pipe_is_call = issue_lsu_is_call;
-                lsu_pipe_is_return = issue_lsu_is_return;
-                lsu_pipe_rob = lsq_rob[issue_lsu_idx];
-                lsu_pipe_dest = lsq_dest[issue_lsu_idx];
-                lsu_pipe_value = issue_lsu_value;
-                lsu_pipe_pred_taken = issue_lsu_pred_taken;
-                lsu_pipe_pred_target = issue_lsu_pred_target;
-                lsu_pipe_actual_taken = issue_lsu_actual_taken;
-                lsu_pipe_actual_target = issue_lsu_actual_target;
-                lsu_pipe_pc = lsq_pc[issue_lsu_idx];
-                if (lsq_is_call[issue_lsu_idx]) begin
-                    lsq_control_issued[issue_lsu_idx] = 1'b1;
+            if (issue_lsu0_valid) begin
+                lsu_pipe_valid[0] = 1'b1;
+                lsu_pipe_has_dest[0] = issue_lsu0_has_dest;
+                lsu_pipe_is_call[0] = issue_lsu0_is_call;
+                lsu_pipe_is_return[0] = issue_lsu0_is_return;
+                lsu_pipe_rob[0] = lsq_rob[issue_lsu0_idx];
+                lsu_pipe_dest[0] = lsq_dest[issue_lsu0_idx];
+                lsu_pipe_value[0] = issue_lsu0_value;
+                lsu_pipe_pred_taken[0] = issue_lsu0_pred_taken;
+                lsu_pipe_pred_target[0] = issue_lsu0_pred_target;
+                lsu_pipe_actual_taken[0] = issue_lsu0_actual_taken;
+                lsu_pipe_actual_target[0] = issue_lsu0_actual_target;
+                lsu_pipe_pc[0] = lsq_pc[issue_lsu0_idx];
+                if (lsq_is_call[issue_lsu0_idx]) begin
+                    lsq_control_issued[issue_lsu0_idx] = 1'b1;
                 end
                 else begin
-                    lsq_valid[issue_lsu_idx] = 1'b0;
+                    lsq_valid[issue_lsu0_idx] = 1'b0;
+                end
+            end
+
+            if (issue_lsu1_valid) begin
+                lsu_pipe_valid[1] = 1'b1;
+                lsu_pipe_has_dest[1] = issue_lsu1_has_dest;
+                lsu_pipe_is_call[1] = issue_lsu1_is_call;
+                lsu_pipe_is_return[1] = issue_lsu1_is_return;
+                lsu_pipe_rob[1] = lsq_rob[issue_lsu1_idx];
+                lsu_pipe_dest[1] = lsq_dest[issue_lsu1_idx];
+                lsu_pipe_value[1] = issue_lsu1_value;
+                lsu_pipe_pred_taken[1] = issue_lsu1_pred_taken;
+                lsu_pipe_pred_target[1] = issue_lsu1_pred_target;
+                lsu_pipe_actual_taken[1] = issue_lsu1_actual_taken;
+                lsu_pipe_actual_target[1] = issue_lsu1_actual_target;
+                lsu_pipe_pc[1] = lsq_pc[issue_lsu1_idx];
+                if (lsq_is_call[issue_lsu1_idx]) begin
+                    lsq_control_issued[issue_lsu1_idx] = 1'b1;
+                end
+                else begin
+                    lsq_valid[issue_lsu1_idx] = 1'b0;
                 end
             end
         end
@@ -1702,13 +1846,13 @@ always @(posedge clk or posedge reset) begin
             for (u = 0; u < 2; u = u + 1) begin
                 if (alu_pipe_valid[u] && rob_is_younger(rob_head, alu_pipe_rob[u], recovery_rob))
                     alu_pipe_valid[u] = 1'b0;
+                if (lsu_pipe_valid[u] && rob_is_younger(rob_head, lsu_pipe_rob[u], recovery_rob))
+                    lsu_pipe_valid[u] = 1'b0;
                 for (s = 0; s < FPU_LAT; s = s + 1) begin
                     if (fpu_pipe_valid[u][s] && rob_is_younger(rob_head, fpu_pipe_rob[u][s], recovery_rob))
                         fpu_pipe_valid[u][s] = 1'b0;
                 end
             end
-            if (lsu_pipe_valid && rob_is_younger(rob_head, lsu_pipe_rob, recovery_rob))
-                lsu_pipe_valid = 1'b0;
         end
         else if (!hlt) begin
             if (dispatch0_valid) begin
